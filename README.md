@@ -25,6 +25,9 @@ Features
 Requirements
 
 • Fish Shell (fish)
+
 • rsync (v3.1.0+ for --info=progress2 support)
+
 • sudo privileges (to read protected directories on recovered ext4 partitions)
+
 • ncurses (tput, pre-installed on most Linux systems)
