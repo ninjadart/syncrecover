@@ -1,0 +1,97 @@
+function syncrecover --description "Fault-tolerant ext4 to exFAT recovery sync (all files by default, or filter by extensions)"
+    if test (count $argv) -lt 2
+        echo "Usage:"
+        echo "  syncrecover <source_path> <destination_path>                 # Copy ALL files"
+        echo "  syncrecover <source_path> <destination_path> doc pdf zip     # Filter by specific extensions (case-insensitive)"
+        echo "  syncrecover <source_path> <destination_path> --preset        # Use built-in document/media/archive preset"
+        return 1
+    end
+
+    # Grab source and destination safely without square brackets
+    set -l src (printf "%s\n" $argv | head -n 1)
+    set -l dest (printf "%s\n" $argv | tail -n +2 | head -n 1)
+    set -l raw_exts (printf "%s\n" $argv | tail -n +3)
+    set -l log_file "$HOME/skipped_recovery_files.txt"
+
+    if not test -d "$src"
+        echo "❌ Source directory not found: $src"
+        return 1
+    end
+
+    # Build dynamic case-insensitive rsync filter flags if extensions or --preset were passed
+    set -l filter_flags
+    if test (count $raw_exts) -gt 0
+        # Expand --preset into your full recovery extension list
+        if contains -- "--preset" $raw_exts
+            set raw_exts m4a doc docx xls xlsx ppt pptx bmp gif rtf csv zip 7z
+        end
+
+        set -a filter_flags "--prune-empty-dirs" "--include=*/"
+
+        for ext in $raw_exts
+            # Strip any leading dot if the user typed ".pdf" instead of "pdf"
+            set -l clean_ext (string replace -r '^\.' '' -- "$ext")
+            set -l pattern "*."
+
+            # Convert each character into case-insensitive [aA] bracket notation
+            for char in (string split "" -- "$clean_ext")
+                if string match -qr '[a-zA-Z]' -- "$char"
+                    set -l lower (string lower -- "$char")
+                    set -l upper (string upper -- "$char")
+                    set pattern "$pattern""[$lower$upper]"
+                else
+                    set pattern "$pattern""$char"
+                end
+            end
+
+            set -a filter_flags "--include=$pattern"
+        end
+
+        set -a filter_flags "--exclude=*"
+    end
+
+    # Authenticate sudo upfront before clearing the screen
+    sudo -v; or return 1
+    mkdir -p "$dest"
+
+    clear
+    echo -e "\n"
+
+    # Pinned 30-second disk space monitor
+    fish -c '
+        set -l target $argv
+        while true
+            tput sc
+            tput cup 0 0
+            printf "\033[2K=== %s ===\n\033[2K%s" (date "+%Y-%m-%d %H:%M:%S") (df -h "$target" | tail -n 1)
+            tput rc
+            sleep 30
+        end
+    ' -- "$dest" &;
+
+    set -l pid $last_pid
+    trap "kill $pid 2>/dev/null" EXIT INT TERM
+
+    # Run rsync (copies all files when $filter_flags is empty, or applies dynamic filters)
+    sudo rsync -rth --modify-window=2 --no-links --ignore-errors --no-inc-recursive \
+        --info=flist2,progress2 \
+        $filter_flags \
+        "$src" "$dest" 2> "$log_file"
+
+    echo -e "\nFlushing remaining RAM write cache to disk... (do not unplug yet)"
+    sync
+
+    kill $pid 2>/dev/null
+    trap - EXIT INT TERM
+
+    echo "Recovery transfer complete and safely synced to disk!"
+
+    if test -s "$log_file"
+        echo "⚠️  Some files were skipped or had errors. See: $log_file"
+    else
+        rm -f "$log_file"
+        echo "✅ Zero files were skipped!"
+    end
+end
+
+funcsave syncrecover
