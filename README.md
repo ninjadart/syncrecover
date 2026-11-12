@@ -5,6 +5,7 @@ A Fish shell function wrapping rsync for fault-tolerant data recovery transfers 
 Features
 
 • Copy Everything or Filter on the Fly: Transfers all files by default, or dynamically builds case-insensitive --include rules when you pass extensions as arguments (e.g., doc pdf zip).
+
 • Built-In Recovery Preset (--preset): Includes a one-flag preset for common documents, spreadsheets, presentations, audio, images, and archives (.m4a, .doc, .docx, .xls, .xlsx, .ppt, .pptx, .bmp, .gif, .rtf, .csv, .zip, .7z).
 • Clean Destination Structure (--prune-empty-dirs): Automatically omits empty directories when filtering for specific file types.
 • exFAT-Optimized Flags (-rth --modify-window=2 --no-links): Handles exFAT's 2-second timestamp resolution, skips unsupported Linux symlinks, and prevents cross-filesystem permission errors.
